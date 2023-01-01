@@ -104,7 +104,7 @@ main (int argc, char *argv[])
 	gboolean timed_exit = FALSE;
 	gboolean immediate_exit = FALSE;
 	gboolean keep_environment = FALSE;
-	gint exit_idle_time;
+	gint exit_idle_time, restart_idle_time = 0;
 	g_autoptr(GError) error = NULL;
 	g_autofree gchar *backend_name = NULL;
 	g_autofree gchar *conf_filename = NULL;
@@ -185,6 +185,11 @@ main (int argc, char *argv[])
 	exit_idle_time = g_key_file_get_integer (conf, "Daemon", "ShutdownTimeout", NULL);
 	g_debug ("daemon shutdown set to %i seconds", exit_idle_time);
 
+	if (!exit_idle_time) {
+		restart_idle_time = g_key_file_get_integer (conf, "Daemon", "RestartTimeout", NULL);
+		g_debug ("daemon restart set to %i seconds", exit_idle_time);
+	}
+
 	/* override the backend name */
 	if (backend_name != NULL) {
 		g_key_file_set_string (conf,
@@ -234,6 +239,11 @@ main (int argc, char *argv[])
 	if (timed_exit)
 		g_timeout_add_seconds (20, (GSourceFunc) timed_exit_cb, loop);
 
+	/* If restart_idle_time is set, then exit_idle_time was not.
+	 * Set exit_idle_time and re-use the idle timer that supports it.
+	 * Before exiting, check for an idle timeout and restart_idle_timer.  */
+	exit_idle_time = restart_idle_time;
+
 	/* only poll when we are alive */
 	if (exit_idle_time > 0 && !disable_timer) {
 		helper.engine = engine;
@@ -255,13 +265,18 @@ out:
 	closelog ();
 
 #ifdef HAVE_SYSTEMD_SD_DAEMON_H
-	sd_notify (0, "STOPPING=1");
+	if (!restart_idle_time || !helper.exit_idle_time || helper.timer_id != 0)
+		sd_notify (0, "STOPPING=1");
 #endif
 
 	if (helper.timer_id > 0)
 		g_source_remove (helper.timer_id);
 	if (loop != NULL)
 		g_main_loop_unref (loop);
+	/* helper.exit_idle_time indicates that the idle timer was initialized,
+	 * and timer_id == 0 indicates that we are exiting due to timeout. */
+	if (restart_idle_time && helper.exit_idle_time && helper.timer_id == 0)
+		execvp (argv[0], argv);
 exit_program:
 	return 0;
 }
