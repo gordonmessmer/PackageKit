@@ -78,6 +78,7 @@ Summary: DNF5 backend for PackageKit
 Supplements: (libdnf5%{?_isa} and PackageKit%{?_isa})
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: libdnf5-plugin-appstream%{?_isa}
+Requires: rpm-plugin-dbus-announce%{?_isa}
 
 %description backend-dnf5
 PackageKit is a D-Bus abstraction layer that allows the session user
