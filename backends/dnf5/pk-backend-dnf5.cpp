@@ -19,6 +19,7 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "pk-backend.h"
 #include "dnf5-backend-utils.hpp"
 #include "dnf5-backend-thread.hpp"
 #include <packagekit-glib2/pk-common-private.h>
@@ -114,8 +115,10 @@ pk_backend_dnf5_rpm_dbus_signal_cb (GDBusConnection *connection,
 	/* We only care if the transaction ended or packages changed */
 	/* The rpm-plugin-dbus-announce sends StartTransaction and EndTransaction */
 	/* We only care about EndTransaction to trigger a refresh */
+	/* On EndTransaction, emit updates-change. pk-engine will notify
+	 *  clients, and pk_backend_context_invalidate_cb will run. */
 	if (g_strcmp0 (signal_name, "EndTransaction") == 0)
-		pk_backend_context_invalidate_cb (backend, NULL);
+		pk_backend_updates_changed (backend);
 }
 
 void
